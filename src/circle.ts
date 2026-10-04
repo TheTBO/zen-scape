@@ -1,4 +1,5 @@
 import { Voice } from "./audio";
+import { pathSegmentCount } from "./load-policy";
 
 export type Point = Readonly<{ x: number; y: number }>;
 export type Viewport = Readonly<{ width: number; height: number }>;
@@ -13,7 +14,6 @@ type Wave = Readonly<{
 
 const GROWTH_MILLISECONDS_PER_PIXEL = 10;
 const TWO_PI = Math.PI * 2;
-const ANGLE_STEP = 0.03;
 
 function createWaves(direction: 1 | -1): Wave[] {
   const count = Math.ceil(Math.random() * 4 + 1);
@@ -33,27 +33,34 @@ export class Circle {
   private readonly position: Point;
   private readonly createdAt: DOMHighResTimeStamp;
   private readonly waves = [...createWaves(1), ...createWaves(-1)];
-  private readonly voice: Voice;
+  private readonly voice: Voice | undefined;
 
   constructor(
     position: Point,
     hue: number,
     createdAt: DOMHighResTimeStamp,
     viewport: Viewport,
+    createVoice: boolean,
   ) {
     this.position = position;
     this.createdAt = createdAt;
     this.color = `hsl(${hue}, 72%, 68%)`;
-    this.voice = new Voice({
-      ...position,
-      hue,
-      viewportWidth: viewport.width,
-      viewportHeight: viewport.height,
-    });
+    if (createVoice) {
+      this.voice = new Voice({
+        ...position,
+        hue,
+        viewportWidth: viewport.width,
+        viewportHeight: viewport.height,
+      });
+    }
+  }
+
+  get isSounding(): boolean {
+    return this.voice !== undefined;
   }
 
   start(): void {
-    this.voice.start();
+    this.voice?.start();
   }
 
   update(
@@ -68,14 +75,20 @@ export class Circle {
     this.rebalance(mixedVoiceCount, viewport);
   }
 
-  draw(ctx: CanvasRenderingContext2D, timestamp: DOMHighResTimeStamp): void {
+  draw(
+    ctx: CanvasRenderingContext2D,
+    timestamp: DOMHighResTimeStamp,
+    blobCount: number,
+  ): void {
     const frame =
       (timestamp - this.createdAt) / GROWTH_MILLISECONDS_PER_PIXEL / 100;
 
     ctx.beginPath();
     ctx.fillStyle = this.color;
 
-    for (let angle = 0; angle <= TWO_PI; angle += ANGLE_STEP) {
+    const segmentCount = pathSegmentCount(blobCount);
+    for (let segment = 0; segment <= segmentCount; segment += 1) {
+      const angle = (segment / segmentCount) * TWO_PI;
       const radius = this.radius + this.rippleOffset(frame, angle);
       const x = this.position.x + radius * Math.cos(angle);
       const y = this.position.y + radius * Math.sin(angle);
@@ -93,7 +106,7 @@ export class Circle {
   }
 
   rebalance(mixedVoiceCount: number, viewport: Viewport): void {
-    this.voice.rebalance(
+    this.voice?.rebalance(
       mixedVoiceCount,
       this.radius,
       Math.max(viewport.width, viewport.height),
@@ -101,7 +114,7 @@ export class Circle {
   }
 
   release(onTailEnded: () => void): void {
-    this.voice.release(onTailEnded);
+    this.voice?.release(onTailEnded);
   }
 
   private rippleOffset(frame: number, angle: number): number {

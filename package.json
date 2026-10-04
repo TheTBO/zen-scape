@@ -2,17 +2,26 @@
   "name": "blobs",
   "private": true,
   "version": "0.0.0",
-  "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "cordova:prepare": "pnpm build && cordova prepare",
+    "android": "pnpm build && cordova run android",
+    "android:build": "pnpm build && cordova build android",
     "preview": "vite preview"
   },
   "devDependencies": {
+    "cordova-android": "^15.1.0",
     "typescript": "~6.0.2",
     "vite": "^8.3.0"
   },
   "dependencies": {
+    "cordova": "^13.0.0",
     "tone": "^15.1.22"
+  },
+  "cordova": {
+    "platforms": [
+      "android"
+    ]
   }
 }

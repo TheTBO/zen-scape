@@ -1,4 +1,5 @@
 import { Circle, type Point, type Viewport } from "./circle";
+import { shouldCreateVoice } from "./load-policy";
 
 type Color = CanvasFillStrokeStyles["fillStyle"];
 
@@ -9,6 +10,7 @@ export class Scene {
   private readonly ctx: CanvasRenderingContext2D;
   private circles: Circle[] = [];
   private backgroundColor: Color = BACKGROUND_COLOR;
+  private soundingCircleCount = 0;
   private releasingVoiceCount = 0;
   private animationFrameId: number | undefined;
 
@@ -24,14 +26,18 @@ export class Scene {
   }
 
   add(position: Point): void {
+    const soundingBlobCount =
+      this.soundingCircleCount + this.releasingVoiceCount;
     const circle = new Circle(
       position,
       Math.random() * 360,
       performance.now(),
       this.viewport,
+      shouldCreateVoice(soundingBlobCount),
     );
 
     this.circles.push(circle);
+    if (circle.isSounding) this.soundingCircleCount += 1;
     this.updateMix();
     circle.start();
     this.requestFrame();
@@ -50,12 +56,14 @@ export class Scene {
     this.paintBackground();
 
     const viewport = this.viewport;
-    const mixedVoiceCount = this.circles.length + this.releasingVoiceCount;
+    const mixedVoiceCount =
+      this.soundingCircleCount + this.releasingVoiceCount;
+    const blobCount = this.circles.length;
     const remaining: Circle[] = [];
 
     for (const circle of this.circles) {
       circle.update(timestamp, mixedVoiceCount, viewport);
-      circle.draw(this.ctx, timestamp);
+      circle.draw(this.ctx, timestamp, blobCount);
 
       if (circle.covers(viewport)) this.release(circle);
       else remaining.push(circle);
@@ -69,6 +77,9 @@ export class Scene {
 
   private release(circle: Circle): void {
     this.backgroundColor = circle.color;
+    if (!circle.isSounding) return;
+
+    this.soundingCircleCount = Math.max(0, this.soundingCircleCount - 1);
     this.releasingVoiceCount += 1;
     circle.release(() => {
       this.releasingVoiceCount = Math.max(0, this.releasingVoiceCount - 1);
@@ -77,7 +88,8 @@ export class Scene {
   }
 
   private updateMix(): void {
-    const mixedVoiceCount = this.circles.length + this.releasingVoiceCount;
+    const mixedVoiceCount =
+      this.soundingCircleCount + this.releasingVoiceCount;
     const viewport = this.viewport;
     this.circles.forEach((circle) =>
       circle.rebalance(mixedVoiceCount, viewport),
